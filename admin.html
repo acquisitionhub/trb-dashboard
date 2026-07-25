@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Twilio Cost Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --paper:#F1F0EC;
+    --ink:#1C1C1A;
+    --accent:#3B4A5A;
+    --line:#DBD9D2;
+    --card:#FFFFFF;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  h1{font-family:'Fraunces',serif;font-weight:500;font-size:22px;margin:0 0 4px 0;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .wrap{max-width:760px;margin:0 auto;padding:48px 24px;}
+  .sub{color:#6b6b64;font-size:13px;margin-bottom:32px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:24px;}
+  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#6b6b64;margin-bottom:6px;margin-top:16px;}
+  input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:3px;font-size:14px;font-family:inherit;}
+  button{margin-top:20px;background:var(--ink);color:var(--paper);border:none;border-radius:3px;padding:11px 18px;font-size:14px;cursor:pointer;}
+  button:hover{background:#333;}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6b6b64;padding:8px 10px;border-bottom:1px solid var(--line);}
+  td{padding:10px 10px;border-bottom:1px solid var(--line);}
+  tr:last-child td{border-bottom:none;}
+  .totals{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);font-size:14px;}
+  .totals .num{font-family:'IBM Plex Mono',monospace;font-weight:500;}
+  .error{color:#B5573A;font-size:13px;margin-top:14px;}
+  .hidden{display:none !important;}
+  .note{font-size:12px;color:#8a8a82;margin-top:20px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="login-view">
+    <h1>Admin</h1>
+    <div class="sub">Twilio cost monitor — restricted access</div>
+    <div class="card">
+      <form id="login-form">
+        <label for="email">Email</label>
+        <input type="email" id="email" required>
+        <label for="password">Password</label>
+        <input type="password" id="password" required>
+        <button type="submit">Log in</button>
+        <div class="error hidden" id="login-error"></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="data-view" class="hidden">
+    <h1>Twilio cost monitor</h1>
+    <div class="sub">Estimated spend this month, based on your own send log — not a live Twilio invoice.</div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Client</th><th>Sent this month</th><th>Est. SMS cost</th><th>Number rental</th><th>Est. total</th></tr></thead>
+        <tbody id="cost-body"></tbody>
+      </table>
+      <div class="totals" id="totals-row"></div>
+    </div>
+    <div class="note">Estimates only — uses Twilio's published UK rates ($0.056/SMS segment, $1.15/month per local number) applied to your own message log. Actual Twilio invoices may differ slightly due to carrier fees or failed-message charges.</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://wvuaqdoijqdyxncpviet.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_N4aqHZv72AvERxh7B-4VQg_Qoa8ngx2';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+  const { error } = await sb.auth.signInWithPassword({
+    email: document.getElementById('email').value,
+    password: document.getElementById('password').value
+  });
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.classList.remove('hidden');
+    return;
+  }
+  await loadCosts();
+});
+
+async function loadCosts(){
+  const { data, error } = await sb.rpc('admin_client_costs');
+  if (error || !data || data.length === 0) {
+    document.getElementById('login-error').textContent = 'No data available for this login — this page is restricted to the admin account.';
+    document.getElementById('login-error').classList.remove('hidden');
+    return;
+  }
+
+  document.getElementById('login-view').classList.add('hidden');
+  document.getElementById('data-view').classList.remove('hidden');
+
+  const body = document.getElementById('cost-body');
+  body.innerHTML = '';
+  let totalSent = 0, totalCost = 0;
+  data.forEach(row => {
+    totalSent += Number(row.sent_this_month || 0);
+    totalCost += Number(row.est_total_usd || 0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${row.business_name || '—'}</td>
+      <td class="mono">${row.sent_this_month || 0}</td>
+      <td class="mono">$${Number(row.est_sms_cost_usd || 0).toFixed(2)}</td>
+      <td class="mono">$${Number(row.est_number_rental_usd || 0).toFixed(2)}</td>
+      <td class="mono">$${Number(row.est_total_usd || 0).toFixed(2)}</td>
+    `;
+    body.appendChild(tr);
+  });
+
+  document.getElementById('totals-row').innerHTML =
+    `Total: <span class="num">${totalSent}</span> sent this month · est. <span class="num">$${totalCost.toFixed(2)}</span> Twilio cost`;
+}
+
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) await loadCosts();
+})();
+</script>
+</body>
+</html>
