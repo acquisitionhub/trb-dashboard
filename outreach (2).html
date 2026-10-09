@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Outreach Tracker — Try Review Bloom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+  /* Layout: one column of gym cards, phone first, with a summary strip and an add form on top. */
+  :root{
+    --paper:#FAF8F2; --ink:#1F2A22; --muted:#6B6558; --brass:#2E7D4F; --brass-dim:#256640;
+    --line:#E0DED0; --card:#FFFFFF; --clay:#B5573A; --clay-bg:#FBF2EF; --good:#2E7D4F; --good-bg:#E6F2EA;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  h1,h2{font-family:'Fraunces',Georgia,serif;font-weight:500;letter-spacing:-.01em;margin:0}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+  .wrap{max-width:860px;margin:0 auto;padding-block:32px 64px;padding-inline:16px}
+  .hidden{display:none!important}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:14px 0 6px}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:4px;font:inherit;font-size:15px;background:#fff;color:var(--ink)}
+  textarea{min-height:60px;resize:vertical}
+  input:focus,select:focus,textarea:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--ink);color:var(--paper);border:0;border-radius:4px;padding:10px 16px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none}
+  .btn:hover{background:#3a362f}
+  .btn.brass{background:var(--brass)} .btn.brass:hover{background:var(--brass-dim)}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)} .btn.ghost:hover{border-color:var(--ink)}
+  .btn.small{padding:7px 11px;font-size:13px}
+  .btn:disabled{opacity:.5;cursor:default}
+  .err{color:var(--clay);font-size:13px;margin-top:10px}
+  .ok{color:var(--good);font-size:13px;margin-top:10px}
+
+  .login{max-width:380px;margin:12vh auto 0;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:32px 28px}
+  .login h1{font-size:22px}
+  .login p{color:var(--muted);font-size:13px;margin:4px 0 8px}
+
+  header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+  header.top h1{font-size:26px}
+  header.top p{margin:4px 0 0;color:var(--muted);font-size:14px}
+  .top-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+  .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px}
+  .sum{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px}
+  .sum b{display:block;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:500;font-variant-numeric:tabular-nums}
+  .sum span{font-size:12px;color:var(--muted)}
+
+  .add{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px;margin-bottom:24px}
+  .add h2{font-size:18px}
+  .add-row{display:grid;grid-template-columns:1.4fr 1fr auto;gap:10px;align-items:end}
+  .add-row label{margin-top:10px}
+
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
+  .chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+  .list{display:grid;gap:12px}
+  .gym{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px;display:grid;gap:12px}
+  .gym.alert{border-left:4px solid var(--clay);padding-left:13px}
+  .gym-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+  .gym-name{font-family:'Fraunces',Georgia,serif;font-size:19px;font-weight:600}
+  .gym-addr{font-size:13px;color:var(--muted);margin-top:2px;min-width:0;overflow-wrap:anywhere}
+  .status{width:auto;min-width:160px;font-size:13px;padding:7px 10px}
+  .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .stat{background:var(--paper);border-radius:4px;padding:10px}
+  .stat b{display:block;font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:500;font-variant-numeric:tabular-nums}
+  .stat span{font-size:11.5px;color:var(--muted)}
+  .delta{color:var(--good);font-size:13px;font-family:'IBM Plex Mono',monospace}
+  .flag{font-size:13px;background:var(--clay-bg);color:var(--clay);border-radius:4px;padding:8px 10px}
+  .flag.good{background:var(--good-bg);color:var(--good)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .link-line{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+  details summary{cursor:pointer;font-size:13px;color:var(--muted)}
+  .empty{text-align:center;color:var(--muted);padding:40px 16px;border:1px dashed var(--line);border-radius:6px;font-size:14px}
+
+  @media (max-width:640px){
+    .summary,.stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .add-row{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="login-view" class="login">
+    <h1>Outreach tracker</h1>
+    <p>Log in with your Try Review Bloom account.</p>
+    <form id="login-form">
+      <label for="email">Email</label>
+      <input type="email" id="email" required autocomplete="email">
+      <label for="password">Password</label>
+      <input type="password" id="password" required autocomplete="current-password">
+      <div style="margin-top:18px"><button class="btn brass" type="submit" id="login-btn" style="width:100%">Log in</button></div>
+      <div class="err hidden" id="login-error"></div>
+    </form>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="top">
+      <div>
+        <h1>Outreach tracker</h1>
+        <p>Posters placed, scans counted and Google reviews checked every morning.</p>
+      </div>
+      <div class="top-actions">
+        <button class="btn ghost small" id="refresh-btn" type="button">Refresh review counts</button>
+        <button class="btn ghost small" id="logout-btn" type="button">Sign out</button>
+      </div>
+    </header>
+
+    <section class="summary" aria-label="Summary">
+      <div class="sum"><b id="s-gyms">0</b><span>Gyms on your list</span></div>
+      <div class="sum"><b id="s-posters">0</b><span>Posters up</span></div>
+      <div class="sum"><b id="s-scans">0</b><span>Scans in the last 7 days</span></div>
+      <div class="sum"><b id="s-reviews">0</b><span>New reviews since posters went up</span></div>
+    </section>
+
+    <form class="add" id="add-form">
+      <h2>Add a gym</h2>
+      <div class="add-row">
+        <div><label for="add-name">Gym name</label><input id="add-name" type="text" placeholder="e.g. Camden BJJ Academy" required></div>
+        <div><label for="add-area">Area or postcode</label><input id="add-area" type="text" placeholder="e.g. Kentish Town or NW5"></div>
+        <button class="btn brass" type="submit" id="add-btn">Find on Google</button>
+      </div>
+      <div class="err hidden" id="add-error"></div>
+      <div class="ok hidden" id="add-ok"></div>
+    </form>
+
+    <div class="filters" id="filters">
+      <button class="chip" type="button" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" type="button" data-f="new" aria-pressed="false">To visit</button>
+      <button class="chip" type="button" data-f="poster_placed" aria-pressed="false">Poster up</button>
+      <button class="chip" type="button" data-f="follow_up" aria-pressed="false">Follow up</button>
+      <button class="chip" type="button" data-f="client" aria-pressed="false">Clients</button>
+      <button class="chip" type="button" data-f="alert" aria-pressed="false">Needs a check</button>
+    </div>
+
+    <div class="list" id="list"></div>
+    <div class="empty hidden" id="empty">No gyms yet. Add the first one above: type its name and area, and it's found on Google with a tracked poster link ready.</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://wvuaqdoijqdyxncpviet.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_N4aqHZv72AvERxh7B-4VQg_Qoa8ngx2';
+const FN = SUPABASE_URL + '/functions/v1/outreach';
+const SHORT = 'https://tryreviewbloom.com/r/?g=';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const STATUS = { new: 'To visit', poster_placed: 'Poster up', follow_up: 'Follow up', client: 'Client', not_interested: 'Not interested' };
+let rows = [], filter = 'all';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const daysSince = (d) => d ? Math.floor((Date.now() - new Date(d).getTime()) / 86400000) : null;
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—';
+
+async function token() { const { data } = await sb.auth.getSession(); return data.session?.access_token; }
+async function callFn(body) {
+  const res = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await token() }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Something went wrong. Try again.');
+  return data;
+}
+
+function needsCheck(r) {
+  return r.status === 'poster_placed' && daysSince(r.poster_placed_at) >= 7 && Number(r.scans_7d) === 0;
+}
+
+function render() {
+  const posters = rows.filter(r => r.poster_placed_at);
+  $('s-gyms').textContent = rows.length;
+  $('s-posters').textContent = posters.length;
+  $('s-scans').textContent = rows.reduce((a, r) => a + Number(r.scans_7d || 0), 0);
+  $('s-reviews').textContent = posters.reduce((a, r) => a + Math.max(0, (r.reviews_now ?? 0) - (r.reviews_start ?? r.reviews_now ?? 0)), 0);
+
+  const shown = rows.filter(r => filter === 'all' ? true : filter === 'alert' ? needsCheck(r) : r.status === filter);
+  $('empty').classList.toggle('hidden', rows.length > 0);
+  $('list').innerHTML = shown.map(r => {
+    const gained = (r.reviews_now ?? 0) - (r.reviews_start ?? r.reviews_now ?? 0);
+    const days = daysSince(r.poster_placed_at);
+    let flag = '';
+    if (needsCheck(r)) flag = `<div class="flag">No scans in the last 7 days. The poster may be down or hidden, so check in with the owner.</div>`;
+    else if (r.poster_placed_at && Number(r.scans_total) > 0) flag = `<div class="flag good">${r.scans_total} scan${r.scans_total == 1 ? '' : 's'} and ${Math.max(0, gained)} new review${gained == 1 ? '' : 's'} since the poster went up ${days === 0 ? 'today' : days + ' day' + (days == 1 ? '' : 's') + ' ago'}.</div>`;
+    const posterUrl = 'poster.html?name=' + encodeURIComponent(r.gym_name) + '&link=' + encodeURIComponent(SHORT + r.slug);
+    return `
+    <article class="gym ${needsCheck(r) ? 'alert' : ''}" data-id="${r.id}">
+      <div class="gym-head">
+        <div style="min-width:0">
+          <div class="gym-name">${esc(r.gym_name)}</div>
+          <div class="gym-addr">${esc(r.address || r.area || '')}</div>
+        </div>
+        <select class="status" data-act="status" aria-label="Status for ${esc(r.gym_name)}">
+          ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${k === r.status ? 'selected' : ''}>${v}</option>`).join('')}
+        </select>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>${fmtDate(r.poster_placed_at)}</b><span>Poster up</span></div>
+        <div class="stat"><b>${r.scans_total}</b><span>Scans (${r.scans_7d} this week)</span></div>
+        <div class="stat"><b>${r.reviews_now ?? '—'}</b><span>Google reviews${r.rating_now ? ' · ' + r.rating_now + '★' : ''}</span></div>
+        <div class="stat"><b>${r.poster_placed_at ? (gained >= 0 ? '+' : '') + gained : '—'}</b><span>Since poster</span></div>
+      </div>
+      ${flag}
+      <div class="actions">
+        <a class="btn brass small" href="${posterUrl}" target="_blank" rel="noopener">Make poster</a>
+        ${r.poster_placed_at ? '' : '<button class="btn small" type="button" data-act="placed">Poster is up</button>'}
+        <button class="btn ghost small" type="button" data-act="copy">Copy tracked link</button>
+      </div>
+      <details>
+        <summary>Notes and details</summary>
+        <label for="notes-${r.id}">Notes (owner's name, answers, follow-up date)</label>
+        <textarea id="notes-${r.id}" data-act="notes">${esc(r.notes)}</textarea>
+        <p class="link-line">Tracked link: <span class="mono">${esc(SHORT + r.slug)}</span><br>Last scan: ${r.last_scan ? new Date(r.last_scan).toLocaleString('en-GB') : 'none yet'}</p>
+        <button class="btn ghost small" type="button" data-act="delete">Remove from list</button>
+      </details>
+    </article>`;
+  }).join('');
+}
+
+async function load() {
+  const { data, error } = await sb.rpc('outreach_summary');
+  if (error) { alertBox('add-error', 'Could not load your list: ' + error.message); return; }
+  rows = data || [];
+  render();
+}
+
+function alertBox(id, msg) { const el = $(id); el.textContent = msg; el.classList.remove('hidden'); setTimeout(() => el.classList.add('hidden'), 6000); }
+
+async function boot() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return;
+  if (data.session.user.id !== 'd14c70b2-feae-48d6-a02b-4d62554453fd') {
+    $('login-error').textContent = 'This login does not have access to the outreach tracker.';
+    $('login-error').classList.remove('hidden');
+    return;
+  }
+  $('login-view').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  await load();
+}
+
+$('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('login-btn'); btn.disabled = true; btn.textContent = 'Logging in…';
+  const { error } = await sb.auth.signInWithPassword({ email: $('email').value, password: $('password').value });
+  btn.disabled = false; btn.textContent = 'Log in';
+  if (error) { $('login-error').textContent = error.message; $('login-error').classList.remove('hidden'); return; }
+  boot();
+});
+$('logout-btn').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+
+$('add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('add-btn'); btn.disabled = true; btn.textContent = 'Searching…';
+  try {
+    const { prospect } = await callFn({ action: 'add', gym_name: $('add-name').value, area: $('add-area').value });
+    alertBox('add-ok', `Added ${prospect.gym_name}. Its tracked poster link is ready.`);
+    $('add-form').reset();
+    await load();
+  } catch (err) { alertBox('add-error', err.message); }
+  btn.disabled = false; btn.textContent = 'Find on Google';
+});
+
+$('refresh-btn').addEventListener('click', async () => {
+  const btn = $('refresh-btn'); btn.disabled = true; btn.textContent = 'Checking Google…';
+  try { await callFn({ action: 'snapshot' }); await load(); } catch (err) { alertBox('add-error', err.message); }
+  btn.disabled = false; btn.textContent = 'Refresh review counts';
+});
+
+$('filters').addEventListener('click', (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  filter = b.dataset.f;
+  document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c === b ? 'true' : 'false'));
+  render();
+});
+
+$('list').addEventListener('change', async (e) => {
+  const card = e.target.closest('.gym'); if (!card) return;
+  const id = card.dataset.id;
+  if (e.target.dataset.act === 'status') {
+    const status = e.target.value;
+    const patch = { status };
+    const row = rows.find(r => r.id === id);
+    if (status === 'poster_placed' && !row.poster_placed_at) patch.poster_placed_at = new Date().toISOString();
+    await sb.from('outreach_prospects').update(patch).eq('id', id);
+    if (patch.poster_placed_at) { try { await callFn({ action: 'snapshot', prospect_id: id }); } catch (_) {} }
+    await load();
+  }
+  if (e.target.dataset.act === 'notes') {
+    await sb.from('outreach_prospects').update({ notes: e.target.value }).eq('id', id);
+  }
+});
+
+$('list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const card = btn.closest('.gym'); const id = card.dataset.id;
+  const row = rows.find(r => r.id === id);
+  if (btn.dataset.act === 'placed') {
+    btn.disabled = true; btn.textContent = 'Saving…';
+    await sb.from('outreach_prospects').update({ status: 'poster_placed', poster_placed_at: new Date().toISOString() }).eq('id', id);
+    try { await callFn({ action: 'snapshot', prospect_id: id }); } catch (_) {}
+    await load();
+  }
+  if (btn.dataset.act === 'copy') {
+    const text = SHORT + row.slug;
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; }
+    catch (_) { btn.textContent = text; }
+    setTimeout(() => { btn.textContent = 'Copy tracked link'; }, 2000);
+  }
+  if (btn.dataset.act === 'delete') {
+    if (btn.dataset.confirm !== 'yes') { btn.dataset.confirm = 'yes'; btn.textContent = 'Tap again to remove'; return; }
+    await sb.from('outreach_prospects').delete().eq('id', id);
+    await load();
+  }
+});
+
+boot();
+</script>
+</body>
+</html>
